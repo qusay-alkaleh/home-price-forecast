@@ -2,6 +2,10 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
+from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
 
 # Veri setini yükleme
 file_path = r"D:\qusay-alkaleh\study\maki̇ne-ogrenmesi\project\housing_price_dataset.csv"
@@ -59,8 +63,70 @@ for column in categorical_columns:
     
 print("### Etiket Kodları Uygulandıktan Sonra Veri Seti ###")
 print(df.head())
+print("\n")
 
 save_labeled_path = r"D:\qusay-alkaleh\study\maki̇ne-ogrenmesi\project\dataset_labeled.csv"
 df.to_csv(save_labeled_path, index=False)
 
+# Özellikler (X) ve hedef (y) sütunlarını ayır
+X = df.drop(columns=["Price"])
+y = df["Price"]
 
+# Veriyi eğitim ve test olarak ayır
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# MinMaxScaler uygulama
+scaler = MinMaxScaler()
+
+# Sadece eğitim verisini kullanarak ölçekleme (fit_transform)
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+print("### Ölçeklendirilmiş Eğitim Verisi (İlk 5 Satır) ###")
+print(X_train_scaled[:5])
+
+
+# Initialize PCA with an RBF kernel
+pca = PCA(n_components=5)
+X_train_pca = pca.fit_transform(X_train_scaled)
+X_test_pca = pca.transform(X_test_scaled)
+
+# Check the resulting components
+print("Transformed Training Data Shape:", X_train_pca.shape)
+
+# Train a model
+model = LinearRegression()
+model.fit(X_train_pca, y_train)
+
+# Predict on training data
+y_train_pred = model.predict(X_train_pca)
+train_mse = mean_squared_error(y_train, y_train_pred)
+train_r2 = r2_score(y_train, y_train_pred)
+
+# Predict on test data
+y_test_pred = model.predict(X_test_pca)
+test_mse = mean_squared_error(y_test, y_test_pred)
+test_r2 = r2_score(y_test, y_test_pred)
+
+print("### Training Performance ###")
+print(f"Mean Squared Error: {train_mse}")
+print(f"R^2 Score: {train_r2}")
+
+print("\n### Test Performance ###")
+print(f"Mean Squared Error: {test_mse}")
+print(f"R^2 Score: {test_r2}")
+
+# Convert PCA transformed data back to DataFrame
+X_train_pca_df = pd.DataFrame(X_train_pca, columns=[f"PC{i+1}" for i in range(X_train_pca.shape[1])])
+X_test_pca_df = pd.DataFrame(X_test_pca, columns=[f"PC{i+1}" for i in range(X_test_pca.shape[1])])
+
+# Reattach the target variable to the PCA-transformed data
+train_dataset = X_train_pca_df.copy()
+train_dataset["Price"] = y_train.reset_index(drop=True)
+
+test_dataset = X_test_pca_df.copy()
+test_dataset["Price"] = y_test.reset_index(drop=True)
+
+# Combine train and test datasets
+dataset_scaled = pd.concat([train_dataset, test_dataset], axis=0)
+save_scaled_path = r"D:\qusay-alkaleh\study\maki̇ne-ogrenmesi\project\dataset_scaled.csv"
+dataset_scaled.to_csv(save_scaled_path, index=False)
